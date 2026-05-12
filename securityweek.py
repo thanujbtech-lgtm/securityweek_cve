@@ -16,7 +16,7 @@ RSS_URL = "https://www.securityweek.com/category/vulnerabilities/feed/"
 
 FILE = "securityweek_cves.xlsx"
 
-CVE_PATTERN = r"CVE[\s\-–—]\d{4}[\s\-–—]\d{4,7}"
+CVE_PATTERN = r"CVE[\s\-–—]*\d{4}[\s\-–—]*\d{4,7}"
 
 HEADERS = {
     "User-Agent": (
@@ -36,9 +36,17 @@ def clean_cve(cve):
 
     cve = cve.upper()
 
-    cve = re.sub(r"[\s_–—]+", "-", cve)
+    cve = re.sub(
+        r"[\s_–—]+",
+        "-",
+        cve
+    )
 
-    cve = re.sub(r"-+", "-", cve)
+    cve = re.sub(
+        r"-+",
+        "-",
+        cve
+    )
 
     return cve.strip("-")
 
@@ -48,7 +56,9 @@ def clean_cve(cve):
 
 def extract_cves(playwright, url):
 
-    browser = playwright.chromium.launch(headless=True)
+    browser = playwright.chromium.launch(
+        headless=True
+    )
 
     page = browser.new_page()
 
@@ -107,12 +117,14 @@ def load_existing_rows():
     ):
 
         if row[0]:
+
             rows.append(row)
 
     return rows
 
 # =====================================
-# EXISTING UNIQUE KEYS
+# DUPLICATE LOGIC
+# SAME CVE + SAME DATE + SAME LINK = SKIP
 # =====================================
 
 def load_existing_keys():
@@ -120,7 +132,11 @@ def load_existing_keys():
     rows = load_existing_rows()
 
     return {
-        (r[0], r[2])
+        (
+            str(r[0]),  # CVE
+            str(r[1]),  # DATE
+            str(r[3])   # LINK
+        )
         for r in rows
     }
 
@@ -141,7 +157,10 @@ def save_all(rows):
         "LINK"
     ])
 
-    # oldest -> newest
+    # =================================
+    # SORT OLDEST → NEWEST
+    # =================================
+
     rows_sorted = sorted(
         rows,
         key=lambda x: datetime.strptime(
@@ -151,6 +170,7 @@ def save_all(rows):
     )
 
     for r in rows_sorted:
+
         ws.append(r)
 
     wb.save(FILE)
@@ -173,7 +193,10 @@ def main():
         response.content
     )
 
-    print("Articles Found:", len(feed.entries))
+    print(
+        "Articles Found:",
+        len(feed.entries)
+    )
 
     existing_rows = load_existing_rows()
 
@@ -183,7 +206,10 @@ def main():
 
     with sync_playwright() as playwright:
 
-        for idx, entry in enumerate(feed.entries, start=1):
+        for idx, entry in enumerate(
+            feed.entries,
+            start=1
+        ):
 
             if not hasattr(
                 entry,
@@ -228,7 +254,15 @@ def main():
 
                     print("-", c)
 
-                    key = (c, link)
+                    # =================================
+                    # NEW DUPLICATE LOGIC
+                    # =================================
+
+                    key = (
+                        c,
+                        date_str,
+                        link
+                    )
 
                     if key not in existing_keys:
 
@@ -247,15 +281,26 @@ def main():
 
             time.sleep(2)
 
+    # =================================
+    # APPEND HISTORY
+    # =================================
+
     all_rows = existing_rows + new_rows
 
     if new_rows:
 
         save_all(all_rows)
 
+        print("\n" + "=" * 60)
         print(
-            f"\nAdded {len(new_rows)} new CVEs"
+            "NEW ROWS ADDED :",
+            len(new_rows)
         )
+        print(
+            "TOTAL ROWS     :",
+            len(all_rows)
+        )
+        print("=" * 60)
 
     else:
 
@@ -266,4 +311,5 @@ def main():
 # =====================================
 
 if __name__ == "__main__":
+
     main()
